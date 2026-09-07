@@ -1,0 +1,4 @@
+
+
+gerar exe
+npm run dist

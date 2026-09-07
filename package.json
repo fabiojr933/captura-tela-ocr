@@ -1,0 +1,40 @@
+{
+  "name": "captura-tela-ocr",
+  "version": "1.0.0",
+  "description": "Aplicativo de Captura de Tela e Transcrição de Texto (OCR)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:css": "tailwindcss -i ./src/input.css -o ./src/output.css --minify",
+    "dist": "npm run build:css && electron-builder"
+  },
+  "build": {
+    "appId": "com.foxsistemas.capturaocr",
+    "productName": "Captura & OCR",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+   "win": {
+      "target": ["nsis", "portable"],
+      "icon": "src/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Captura & OCR"
+    }
+  },
+  "dependencies": {
+    "tesseract.js": "^5.1.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}
