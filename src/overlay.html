@@ -5,10 +5,9 @@
   <title>Overlay de Captura</title>
   <style>
     :root {
-      /* 🎨 ALTERE AS CORES DA BORDA AQUI */
-      --border-primary: #06b6d4;             /* Cor principal */
-      --border-pulse: #3b82f6;               /* Cor do brilho ao pulsar */
-      --border-glow: rgba(6, 182, 212, 0.5); /* Brilho neon interno */
+      --border-primary: #06b6d4;
+      --border-pulse: #3b82f6;
+      --border-glow: rgba(6, 182, 212, 0.5);
     }
 
     * {
@@ -16,23 +15,24 @@
       margin: 0;
       padding: 0;
       user-select: none;
+      -webkit-user-select: none;
     }
 
-    body, html {
-      width: 100%;
-      height: 100%;
+    html, body {
+      width: 100vw;
+      height: 100vh;
       overflow: hidden;
-      background: transparent;
+      background: rgba(0, 0, 0, 0.01); /* Força o Chromium a capturar eventos de ponteiro */
       cursor: crosshair;
+      pointer-events: auto;
     }
 
-    /* Borda em toda a tela */
     .screen-border {
       position: fixed;
       inset: 0;
       border: 4px solid var(--border-primary);
       box-shadow: inset 0 0 20px var(--border-glow);
-      pointer-events: none;
+      pointer-events: none !important;
       z-index: 9999;
       animation: pulse-border 2s infinite ease-in-out;
     }
@@ -48,7 +48,6 @@
       }
     }
 
-    /* Badge no topo com atalhos */
     .instruction-badge {
       position: fixed;
       top: 16px;
@@ -62,7 +61,7 @@
       font-size: 13px;
       font-weight: 500;
       border: 1px solid rgba(255, 255, 255, 0.15);
-      pointer-events: none;
+      pointer-events: none !important;
       z-index: 9998;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
     }
@@ -71,17 +70,17 @@
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      pointer-events: auto;
     }
   </style>
 </head>
 <body>
 
-  <!-- Borda neon em toda a tela -->
   <div class="screen-border"></div>
 
-  <!-- Tag informativa -->
   <div class="instruction-badge">
     ✂️ Clique e arraste para selecionar a área • Pressione <strong>ESC</strong> para cancelar
   </div>
@@ -92,39 +91,37 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Pega a cor principal definida no CSS para a caixa de seleção do mouse
     const primaryColor = getComputedStyle(document.documentElement)
       .getPropertyValue('--border-primary').trim() || '#06b6d4';
 
     let bgImage = new Image();
     let isDrawing = false;
-    let startX = 0;
-    let startY = 0;
-    let currentX = 0;
-    let currentY = 0;
+    let startX = 0, startY = 0, currentX = 0, currentY = 0;
 
-    window.electronAPI.onInitOverlay((data) => {
+    function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+    }
 
-      bgImage.onload = () => {
-        drawOverlay();
-      };
+    // Registra o evento recebido via IPC exposto no preload.js
+    window.electronAPI.onInitOverlay((data) => {
+      resizeCanvas();
+      bgImage.onload = () => drawOverlay();
       bgImage.src = data.imageUri;
     });
 
     function drawOverlay() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Renderiza a imagem de fundo capturada
       if (bgImage.complete && bgImage.naturalWidth !== 0) {
         ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
       }
 
-      // Escurece o fundo
+      // Máscara escura semi-transparente
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Área recortada pelo mouse
       if (isDrawing) {
         const x = Math.min(startX, currentX);
         const y = Math.min(startY, currentY);
@@ -132,6 +129,7 @@
         const h = Math.abs(currentY - startY);
 
         if (w > 0 && h > 0) {
+          // Recorta e mostra a imagem original na área selecionada
           ctx.save();
           ctx.beginPath();
           ctx.rect(x, y, w, h);
@@ -139,12 +137,12 @@
           ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
           ctx.restore();
 
-          // Retângulo de seleção na mesma cor da borda
+          // Desenha a borda da seleção
           ctx.strokeStyle = primaryColor;
           ctx.lineWidth = 2;
           ctx.strokeRect(x, y, w, h);
 
-          // Tag de dimensões (L x A)
+          // Badge com as dimensões da seleção
           ctx.fillStyle = primaryColor;
           ctx.fillRect(x, Math.max(0, y - 22), 90, 20);
           ctx.fillStyle = '#ffffff';
@@ -154,7 +152,8 @@
       }
     }
 
-    window.addEventListener('mousedown', (e) => {
+    window.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
       isDrawing = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -163,14 +162,14 @@
       drawOverlay();
     });
 
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener('pointermove', (e) => {
       if (!isDrawing) return;
       currentX = e.clientX;
       currentY = e.clientY;
       drawOverlay();
     });
 
-    window.addEventListener('mouseup', async (e) => {
+    window.addEventListener('pointerup', async (e) => {
       if (!isDrawing) return;
       isDrawing = false;
 
@@ -180,7 +179,14 @@
       const height = Math.abs(currentY - startY);
 
       if (width > 10 && height > 10) {
-        await window.electronAPI.cropAndSave({ x, y, width, height });
+        // Envia as coordenadas considerando o fator de escala de telas High-DPI / Retinal
+        const scale = window.devicePixelRatio || 1;
+        await window.electronAPI.cropAndSave({
+          x: Math.round(x * scale),
+          y: Math.round(y * scale),
+          width: Math.round(width * scale),
+          height: Math.round(height * scale)
+        });
       } else {
         drawOverlay();
       }
@@ -193,8 +199,7 @@
     });
 
     window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      resizeCanvas();
       drawOverlay();
     });
   </script>
